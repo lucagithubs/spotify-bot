@@ -1,41 +1,45 @@
-const { REST, Routes } = require('discord.js');
+const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
 
-const commands = [];
+const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+client.commands = new Collection();
+
+// Load commands
 const commandsPath = path.join(__dirname, 'commands');
 const commandFiles = fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'));
 
+console.log(`📂 Loading ${commandFiles.length} command(s)...`);
 for (const file of commandFiles) {
   const command = require(path.join(commandsPath, file));
-  commands.push(command.data.toJSON());
+  client.commands.set(command.data.name, command);
+  console.log(`✅ Loaded command: /${command.data.name}`);
 }
 
-const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+client.once('ready', () => {
+  console.log(`🤖 Bot is online as ${client.user.tag}`);
+  console.log(`⚡ Ready to serve ${client.guilds.cache.size} guild(s)`);
+});
 
-(async () => {
+client.on('interactionCreate', async (interaction) => {
+  if (!interaction.isChatInputCommand()) return;
+
+  const command = client.commands.get(interaction.commandName);
+  if (!command) return;
+
   try {
-    console.log('🧹 Clearing old guild commands...');
-    await rest.put(
-      Routes.applicationGuildCommands(process.env.DISCORD_APPLICATION_ID, '1474450202671710450'),
-      { body: [] }
-    );
-
-    console.log('🧹 Clearing old global commands...');
-    await rest.put(
-      Routes.applicationCommands(process.env.DISCORD_APPLICATION_ID),
-      { body: [] }
-    );
-
-    console.log('🚀 Registering commands globally...');
-    await rest.put(
-      Routes.applicationCommands(process.env.DISCORD_APPLICATION_ID),
-      { body: commands }
-    );
-
-    console.log('✅ Commands registered!');
+    console.log(`📝 Executing command: /${interaction.commandName} in guild ${interaction.guildId}`);
+    await command.execute(interaction);
   } catch (error) {
-    console.error('❌ Failed to register commands:', error);
+    console.error(`❌ Error executing command: ${error.message}`);
+    const msg = { content: '❌ Something went wrong!', ephemeral: true };
+    if (interaction.replied || interaction.deferred) {
+      await interaction.followUp(msg);
+    } else {
+      await interaction.reply(msg);
+    }
   }
-})();
+});
+
+client.login(process.env.DISCORD_TOKEN);
