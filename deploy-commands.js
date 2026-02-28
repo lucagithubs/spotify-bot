@@ -1,5 +1,41 @@
-SPOTIFY_CLIENT_ID=e1f32559085141a3ad1312a41e783dbd
-SPOTIFY_CLIENT_SECRET=83cc73368fc94c9aae85a39b916b67df
-SPOTIFY_REFRESH_TOKEN=AQDi91b1IwdWWv4_BaEYHtKrDRmORaMoQJ16iQttmwVp8iW902o0NjrU5N2p6K96LRnVBkuQnJTfk2Y21o-FB-3sytkgxBJSf17pBgyDLGOJ2wAkx9iYeH1X-u2G8BrSPrg
-DISCORD_TOKEN=MTQ3NDQ0OTcwNDAzNjIwNDY5Nw.GtDmN8.-f81sJxWOhfChvx9bQ6Gywn_6fkQ_IPMPm67B4
-DISCORD_APPLICATION_ID=1474449704036204697
+const { REST, Routes } = require('discord.js');
+const fs = require('fs');
+const path = require('path');
+require('dotenv').config();
+
+const commands = [];
+const commandsPath = path.join(__dirname, 'commands');
+const commandFiles = fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'));
+
+for (const file of commandFiles) {
+  const command = require(path.join(commandsPath, file));
+  commands.push(command.data.toJSON());
+}
+
+const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+
+(async () => {
+  try {
+    console.log('🧹 Clearing old guild commands...');
+    await rest.put(
+      Routes.applicationGuildCommands(process.env.DISCORD_APPLICATION_ID, '1474450202671710450'),
+      { body: [] }
+    );
+
+    console.log('🧹 Clearing old global commands...');
+    await rest.put(
+      Routes.applicationCommands(process.env.DISCORD_APPLICATION_ID),
+      { body: [] }
+    );
+
+    console.log('🚀 Registering commands globally...');
+    await rest.put(
+      Routes.applicationCommands(process.env.DISCORD_APPLICATION_ID),
+      { body: commands }
+    );
+
+    console.log('✅ Commands registered!');
+  } catch (error) {
+    console.error('❌ Failed to register commands:', error);
+  }
+})();
